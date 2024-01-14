@@ -1,0 +1,30 @@
+```{r, warning=FALSE, message=FALSE}
+library(randomForest)
+OU_Forest = randomForest(Flipped ~ ., data = Train, ntree=200, nodesize=25 )
+```
+### **CONFUSION MATRIX**
+```{r, warning=FALSE, message=FALSE}
+PredictForest = predict(OU_Forest, newdata = Test)
+confusionMatrix(data = PredictForest, reference = Test$Flipped)
+```
+Approximately 72.73% of all predictions were correct, indicating a moderately accurate model. The model shows moderate accuracy in predicting the target variable, with a fairly balanced performance between sensitivity and specificity. 
+
+
+```{r, warning=FALSE, message=FALSE}
+search_grid = expand.grid(.mtry = c(1:6)) # by expand.grid we can only tune mtry, ntree and nodesize should directly be passed to train
+train(Flipped ~ ., data = Train, method = "rf", trControl = numFolds, tuneGrid = search_grid, ntree=200, nodesize=25 )
+```
+```{r}
+feature_importance <- importance(OU_Forest)
+print(feature_importance)
+```
+It appears that OU_LOS_hrs (length of stay in hours) is the most important predictor, followed by DRG01 and Temperature. Other predictors like BloodPressureUpper, BloodPressureLower, BloodPressureDiff, Pulse, Respirations, PulseOximetry, and PrimaryInsuranceCategory also have notable importance in the model.
+
+
+```{r, warning=FALSE, message=FALSE}
+predicted_probabilities_FOREST <- predict(OU_Forest, newdata = Test, type = "prob")[, "1"]
+roc_obj_FOREST <- roc(Test$Flipped, predicted_probabilities_FOREST)
+auc_value_FOREST <- auc(roc_obj_FOREST)
+plot(roc_obj_FOREST, main = "ROC Curve", col = "blue", lwd = 2)
+auc_value_FOREST
+```
