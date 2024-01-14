@@ -1,0 +1,232 @@
+***Loading Data***
+```{r}
+ou_data <- read.csv("C:/Users/Sanelisiwe/Documents/Fall Part 1/Data Driven Decision Making- Optimization/FINAL PROJECT/OUData.csv")
+```
+
+## DATA MANIPULATION AND CLEANING AND DIMENSION REDUCTION
+
+***Data Set Dimension***
+```{r}
+dim(ou_data)
+```
+```{r}
+str(ou_data)
+```
+
+### Converting Variables
+```{r, warning=FALSE, message=FALSE}
+ou_data$Age <- as.integer(ou_data$Age)
+ou_data$BloodPressureUpper <- as.integer(ou_data$BloodPressureUpper)
+ou_data$BloodPressureLower <- as.integer(ou_data$BloodPressureLower)
+ou_data$BloodPressureDiff <- as.integer(ou_data$BloodPressureDiff)
+ou_data$Pulse <- as.integer(ou_data$Pulse)
+ou_data$PulseOximetry <- as.integer(ou_data$PulseOximetry)
+ou_data$Respirations <- as.integer(ou_data$Respirations)
+ou_data$Temperature <- as.numeric(ou_data$Temperature)
+ou_data$OU_LOS_hrs <- as.numeric(ou_data$OU_LOS_hrs)
+```
+***Cagtegorical Data***
+```{r, warning=FALSE}
+ou_data$Gender <- as.factor(ou_data$Gender)
+ou_data$PrimaryInsuranceCategory <- as.factor(ou_data$PrimaryInsuranceCategory)
+ou_data$Flipped <- as.factor(ou_data$Flipped)
+ou_data$DRG01 <- as.factor(ou_data$DRG01)
+```
+
+### Checking and Removing Missing Values in Data Set
+```{r}
+missing_values_count <- colSums(is.na(ou_data))
+print(missing_values_count)
+```
+***Removing Missing Values***
+```{r}
+ou_data <- subset(ou_data, Temperature != "NULL" & Temperature != "#VALUE!")
+ou_data <- subset(ou_data, Respirations != "NULL" & Respirations != "#VALUE!")
+ou_data <- subset(ou_data, PulseOximetry != "NULL" & PulseOximetry != "#VALUE!")
+ou_data <- subset(ou_data, Pulse != "NULL" & Pulse != "#VALUE!")
+ou_data <- subset(ou_data, BloodPressureDiff != "NULL" & BloodPressureDiff != "#VALUE!")
+ou_data <- subset(ou_data, BloodPressureUpper != "NULL" & BloodPressureUpper != "#VALUE!")
+```
+```{r}
+missing_values_count <- colSums(is.na(ou_data))
+print(missing_values_count)
+```
+
+The Variable ObservationRecordKey is a unique number for each patient and is not repeated, May not affect the model or logically make sense as the cause of a patient to be flipped
+The variable InitPatientClassAndFirstPostOUClass if converted into a categorical variable will be the same as the variable flipped.
+***Dropping ObservationRecordKey and InitPatientClassAndFirstPostOUClass***
+
+```{r, warning=FALSE}
+ou_data <- ou_data[, !colnames(ou_data) %in% c('ObservationRecordKey', 'InitPatientClassAndFirstPostOUClass')]
+```
+
+
+***Data Dimension after cleaning***
+```{r}
+dim(ou_data)
+```
+
+## DATA EXPLORATION
+
+***Checking for Multicolinearity***
+```{r, warning=FALSE, message=FALSE}
+library(car)  
+library(dplyr)
+
+independent_vars <- ou_data %>%
+  select(Age, Gender, PrimaryInsuranceCategory, OU_LOS_hrs, DRG01, 
+         BloodPressureUpper, BloodPressureLower, BloodPressureDiff, 
+         Pulse, PulseOximetry, Respirations, Temperature)
+
+vif_values <- vif(lm(OU_LOS_hrs ~ ., data = independent_vars))
+
+print(vif_values)
+```
+
+All variables have VIF values well below 10, indicating a low to very low level of multicollinearity. This suggests that multicollinearity is not a significant concern for this model, and the independent variables can be considered individually without major issues related to multicollinearity.
+
+
+***Descriptive Statistics***
+```{r}
+summary(ou_data)
+```
+***Distributions***
+```{r}
+par(mfrow = c(3, 2))
+hist(ou_data$Age, main = 'Age Distribution', xlab = 'Age', breaks = 'FD', col = 'blue')
+hist(ou_data$OU_LOS_hrs, main = 'OU LOS Hours Distribution', xlab = 'Hours', breaks = 'FD', col = 'blue')
+hist(ou_data$BloodPressureUpper, main = 'BP Upper Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+hist(ou_data$BloodPressureLower, main = 'BP Lower Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+hist(ou_data$BloodPressureDiff, main = 'BP DIfference Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+```
+```{r}
+par(mfrow = c(2, 2))
+hist(ou_data$Pulse, main = 'Pulse Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+hist(ou_data$PulseOximetry, main = 'Pulse Oximetry Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+hist(ou_data$Respirations, main = 'Respirations Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+hist(ou_data$Temperature, main = 'Temperature Distribution', xlab = 'BP', breaks = 'FD', col = 'blue')
+```
+
+
+# Model Formulation
+
+## LOGISTIC REGRESSION
+
+***DATA PARTITIONING***
+```{r}
+set.seed(125)
+training.rows <- sample(rownames(ou_data), dim(ou_data)[1]*0.7)
+training.df <- ou_data[training.rows, ]
+dim(training.df)
+```
+```{r}
+testing.rows <- sample(setdiff(rownames(ou_data), training.rows),
+dim(ou_data)[1]*0.3)
+testing.df <- ou_data[testing.rows, ]
+dim(testing.df)
+```
+
+***Checking Data Balance "flipped"***
+```{r}
+prop_table <- prop.table(table(training.df$Flipped))
+print(prop_table)
+```
+```{r}
+model_1 <- glm(Flipped ~ Age + Gender  + PrimaryInsuranceCategory + OU_LOS_hrs + DRG01 + BloodPressureUpper + BloodPressureLower + BloodPressureDiff + Pulse + PulseOximetry + Respirations + Temperature, 
+             data = training.df, 
+             family = binomial)
+summary(model_1)
+```
+
+PrimaryInsuranceCategory:
+"MEDICARE" has a positive coefficient, indicating that being under the "MEDICARE" insurance category increases the odds of the event being predicted (Flipped).
+"MEDICARE OTHER" and "Private" categories are included, but their coefficients are not statistically significant in any of the models.
+
+OU_LOS_hrs (Length of Stay in Observation Unit in hours):
+A higher length of stay in the observation unit (OU_LOS_hrs) increases the odds of the event being predicted (Flipped).
+
+DRG codes (Diagnosis-Related Groups):
+Different DRG codes have different impacts on the odds of the event being predicted, depending on the model. Some DRG codes are statistically significant predictors.
+
+
+# Model Evaluation
+
+### **CONFUSION MATRIX**
+```{r}
+predicted_probabilities_1 <- predict(model_1, newdata = testing.df, type = "response")
+predictions_1 <- ifelse(predicted_probabilities_1 > 0.5, 1, 0)
+```
+
+```{r, warning=FALSE,message=FALSE}
+library(caret)
+confusionMatrix(data = as.factor(predictions_1), reference = as.factor(testing.df$Flipped))
+```
+
+
+### **ROC CURVE AND AUC**
+```{r, warning=FALSE,message=FALSE}
+library(pROC)
+roc_obj_1 <- roc(testing.df$Flipped, predicted_probabilities_1)
+plot(roc_obj_1, main = "ROC Curve", col = "blue", lwd = 2)
+```
+```{r}
+auc_value <- auc(roc_obj_1)
+print(auc_value)
+```
+
+
+
+```{r, warning=FALSE,message=FALSE}
+optimal_cutoff_1 <- coords(roc_obj_1, "best", maximize = TRUE)
+optimal_cutoff_1
+```
+An AUC of 0.8317 indicates that your model has a good predictive power and is effective at distinguishing between the classes. In practical terms, 83.17% of the time, a randomly selected instance from the positive class will have a higher predicted probability than a randomly selected instance from the negative class.
+
+
+### **DECILE AND LIFT CHART**
+```{r}
+testing.df$PredictedProbabilities <- predicted_probabilities_1
+testing.df$PredictedClass <- predictions_1
+
+testing.df$Decile <- ntile(-testing.df$PredictedProbabilities, 10)
+
+
+decile_proportions <- aggregate(testing.df$PredictedClass, by=list(Decile=testing.df$Decile), FUN=mean)
+
+
+cumulative_lift <- cumsum(decile_proportions$x) / sum(testing.df$PredictedClass)
+
+
+plot(decile_proportions$Decile, cumulative_lift, type="b", ylim=c(0, max(cumulative_lift) + 0.1), 
+     xlab="Decile", ylab="Cumulative Lift", main="Lift Chart")
+```
+
+```{r}
+testing.df$PredictedProbabilities <- predicted_probabilities_1
+testing.df$PredictedClass <- predictions_1
+
+testing.df$Decile <- ntile(-testing.df$PredictedProbabilities, 10)
+
+
+decile_proportions <- aggregate(testing.df$PredictedClass, by=list(Decile=testing.df$Decile), FUN=mean)
+
+barplot(decile_proportions$x, names.arg = decile_proportions$Decile, col = "lightblue",
+        xlab="Decile", ylab="Proportion of Positives", 
+        main="Decile Chart")
+```
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+testing.df$PredictedProbabilities <- predicted_probabilities_1
+testing.df$PredictedClass <- testing.df$PredictedClass
+
+
+testing.df$Decile <- ntile(-testing.df$PredictedProbabilities, 10)
+
+avg_proportion_positives <- mean(testing.df$PredictedClass)
+
+
+specific_decile <- 1
+
+
+
